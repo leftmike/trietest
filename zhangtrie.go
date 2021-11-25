@@ -27,6 +27,10 @@ func (zt zhangTrie) Get(key []byte) ([]byte, error) {
 	return val, nil
 }
 
+func (zt zhangTrie) Hash() []byte {
+	return zt.trie.Hash()
+}
+
 func (zt zhangTrie) Put(key, val []byte) error {
 	zt.trie.Put(key, val)
 	return nil

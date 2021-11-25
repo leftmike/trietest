@@ -12,5 +12,6 @@ var (
 type Trie interface {
 	Delete(key []byte) error
 	Get(key []byte) ([]byte, error)
+	Hash() []byte
 	Put(key, val []byte) error
 }

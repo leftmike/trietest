@@ -30,6 +30,10 @@ func (mpt mpTrie) Get(key []byte) ([]byte, error) {
 	return val, err
 }
 
+func (mpt mpTrie) Hash() []byte {
+	return mpt.trie.Hash()
+}
+
 func (mpt mpTrie) Put(key, val []byte) error {
 	return mpt.trie.Put(key, val)
 }

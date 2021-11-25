@@ -42,6 +42,11 @@ func (et ethTrie) Get(key []byte) ([]byte, error) {
 	return val, err
 }
 
+func (et ethTrie) Hash() []byte {
+	h := et.trie.Hash()
+	return h[:]
+}
+
 func (et ethTrie) Put(key, val []byte) error {
 	return et.trie.TryUpdate(key, val)
 }

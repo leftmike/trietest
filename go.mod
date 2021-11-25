@@ -5,6 +5,7 @@ go 1.17
 require github.com/leftmike/merklepatriciatrie v0.0.0-20211121165606-7eaa9a3a5421
 
 replace github.com/leftmike/merklepatriciatrie => ../merklepatriciatrie
+replace github.com/leftmike/mptrie => ../mptrie
 
 require (
 	github.com/StackExchange/wmi v0.0.0-20180116203802-5d049714c4a6 // indirect
