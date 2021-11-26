@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/leftmike/mptrie"
 	"github.com/leftmike/trietest"
 )
 
@@ -67,12 +65,6 @@ func testTrie(t *testing.T, who string, trie trietest.Trie, cases []testCase) {
 			if ok {
 				if !bytes.Equal(s, c.s) {
 					t.Errorf("%s.Serialize(): got %#v, want %#v", who, s, c.s)
-				}
-
-				ethHash := crypto.Keccak256(s)
-				mptHash := mptrie.Keccak256(s)
-				if !bytes.Equal(ethHash, mptHash) {
-					t.Errorf("mptrie.Keccak256(%#v): got %#v, want %#v", s, mptHash, ethHash)
 				}
 			}
 
