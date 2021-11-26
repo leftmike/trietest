@@ -35,3 +35,7 @@ func (zt zhangTrie) Put(key, val []byte) error {
 	zt.trie.Put(key, val)
 	return nil
 }
+
+func (zt zhangTrie) Serialize() ([]byte, bool) {
+	return zt.trie.Root().Serialize(), true
+}

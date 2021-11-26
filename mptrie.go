@@ -37,3 +37,7 @@ func (mpt mpTrie) Hash() []byte {
 func (mpt mpTrie) Put(key, val []byte) error {
 	return mpt.trie.Put(key, val)
 }
+
+func (mpt mpTrie) Serialize() ([]byte, bool) {
+	return mpt.trie.Encode(), true
+}

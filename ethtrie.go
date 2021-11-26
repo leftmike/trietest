@@ -50,3 +50,7 @@ func (et ethTrie) Hash() []byte {
 func (et ethTrie) Put(key, val []byte) error {
 	return et.trie.TryUpdate(key, val)
 }
+
+func (_ ethTrie) Serialize() ([]byte, bool) {
+	return nil, false
+}

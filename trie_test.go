@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/leftmike/mptrie"
 	"github.com/leftmike/trietest"
 )
 
@@ -14,15 +16,16 @@ const (
 	testGet testOp = iota
 	testHash
 	testPut
+	testSerialize
 )
 
 type testCase struct {
 	op             testOp
-	k, v, h        []byte
+	k, v, h, s     []byte
 	fail, notFound bool
 }
 
-func testTrie(t *testing.T, trie trietest.Trie, cases []testCase) {
+func testTrie(t *testing.T, who string, trie trietest.Trie, cases []testCase) {
 	t.Helper()
 
 	for _, c := range cases {
@@ -31,49 +34,89 @@ func testTrie(t *testing.T, trie trietest.Trie, cases []testCase) {
 			v, err := trie.Get(c.k)
 			if c.notFound {
 				if err != trietest.ErrNotFound {
-					t.Errorf("trie.Get(%v) returned %s, expected not found", c.k, err)
+					t.Errorf("%s.Get(%#v) returned %s, expected not found", who, c.k, err)
 				}
 			} else if c.fail {
 				if err == nil {
-					t.Errorf("trie.Get(%v) did not fail", c.k)
+					t.Errorf("%s.Get(%#v) did not fail", who, c.k)
 				}
 			} else if err != nil {
-				t.Errorf("trie.Get(%v) failed with %s", c.k, err)
+				t.Errorf("%s.Get(%#v) failed with %s", who, c.k, err)
 			} else if !bytes.Equal(c.v, v) {
-				t.Errorf("trie.Get(%v): got %v, want %v", c.k, v, c.v)
+				t.Errorf("%s.Get(%#v): got %#v, want %#v", who, c.k, v, c.v)
 			}
 
 		case testHash:
 			h := trie.Hash()
 			if !bytes.Equal(c.h, h) {
-				t.Errorf("trie.Hash(): got %#v, want %#v", h, c.h)
+				t.Errorf("%s.Hash(): got %#v, want %#v", who, h, c.h)
 			}
 
 		case testPut:
 			err := trie.Put(c.k, c.v)
 			if c.fail {
 				if err == nil {
-					t.Errorf("trie.Put(%v, %v) did not fail", c.k, c.v)
+					t.Errorf("%s.Put(%#v, %#v) did not fail", who, c.k, c.v)
 				}
 			} else if err != nil {
-				t.Errorf("trie.Put(%v, %v) failed with %s", c.k, c.v, err)
+				t.Errorf("%s.Put(%#v, %#v) failed with %s", who, c.k, c.v, err)
+			}
+
+		case testSerialize:
+			s, ok := trie.Serialize()
+			if ok {
+				if !bytes.Equal(s, c.s) {
+					t.Errorf("%s.Serialize(): got %#v, want %#v", who, s, c.s)
+				}
+
+				ethHash := crypto.Keccak256(s)
+				mptHash := mptrie.Keccak256(s)
+				if !bytes.Equal(ethHash, mptHash) {
+					t.Errorf("mptrie.Keccak256(%#v): got %#v, want %#v", s, mptHash, ethHash)
+				}
 			}
 
 		default:
-			panic(fmt.Sprintf("unexpected test op: %v", c.op))
+			panic(fmt.Sprintf("unexpected test op: %#v", c.op))
 		}
 	}
 }
 
-func testBasic(t *testing.T, newTrie func() trietest.Trie) {
+func testBasic(t *testing.T, who string, newTrie func() trietest.Trie) {
 	t.Helper()
+
+	testTrie(t, who, newTrie(),
+		[]testCase{
+			{
+				op: testPut,
+				k:  []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+				v:  []byte("0123456789012345678901234567890123456789"),
+			},
+			{
+				op: testHash,
+				h: []byte{0xa3, 0x20, 0xa, 0x22, 0x8c, 0x3f, 0xfd, 0xaf, 0x4c, 0x2a, 0x76, 0xb7,
+					0x22, 0xfb, 0x81, 0x9c, 0xae, 0x1, 0x9d, 0xe2, 0xd3, 0x88, 0xac, 0x9f, 0x8f,
+					0xc4, 0x4d, 0x56, 0x55, 0xba, 0x61, 0x2d},
+			},
+			{
+				op: testSerialize,
+				s: []byte{0xf8, 0x5f, 0xb5, 0x20, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68,
+					0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75,
+					0x76, 0x77, 0x78, 0x79, 0x7a, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48,
+					0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55,
+					0x56, 0x57, 0x58, 0x59, 0x5a, 0xa8, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36,
+					0x37, 0x38, 0x39, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
+					0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x31, 0x32,
+					0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39},
+			},
+		})
 
 	key1 := []byte{0x00, 0x12, 0x34}
 	val1 := []byte{0x01, 0x23, 0x45}
 	key2 := []byte{0xA0, 0x12, 0x34}
 	val2 := []byte{0xA1, 0x23, 0x45}
 
-	testTrie(t, newTrie(),
+	testTrie(t, who, newTrie(),
 		[]testCase{
 			{
 				op: testHash,
@@ -84,6 +127,16 @@ func testBasic(t *testing.T, newTrie func() trietest.Trie) {
 			{op: testGet, k: key1, notFound: true},
 			{op: testPut, k: key1, v: val1},
 			{op: testGet, k: key1, v: val1},
+			{
+				op: testHash,
+				h: []byte{0x72, 0x94, 0xf6, 0x2, 0x63, 0xb8, 0x94, 0xf, 0x7a, 0x61, 0x11, 0x12,
+					0x25, 0x42, 0x7a, 0xfc, 0x2f, 0xe2, 0xe8, 0x11, 0x13, 0x2a, 0xaa, 0x50, 0x86,
+					0xcd, 0x9a, 0xa1, 0x27, 0xa6, 0x72, 0xe},
+			},
+			{
+				op: testSerialize,
+				s:  []byte{0xc9, 0x84, 0x20, 0x0, 0x12, 0x34, 0x83, 0x1, 0x23, 0x45},
+			},
 			{op: testGet, k: key2, notFound: true},
 			{op: testPut, k: key2, v: val2},
 			{op: testGet, k: key1, v: val1},
@@ -94,12 +147,18 @@ func testBasic(t *testing.T, newTrie func() trietest.Trie) {
 					0xdc, 0x3f, 0x7a, 0xaa, 0xa9, 0x7, 0x1, 0x6c, 0x64, 0x2a, 0x8e, 0x82, 0xae,
 					0x28, 0xc1, 0x72, 0x59, 0xb2, 0x3e, 0xc7},
 			},
+			{
+				op: testSerialize,
+				s: []byte{0xe1, 0xc8, 0x83, 0x30, 0x12, 0x34, 0x83, 0x1, 0x23, 0x45, 0x80, 0x80,
+					0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0xc8, 0x83, 0x30, 0x12, 0x34, 0x83,
+					0xa1, 0x23, 0x45, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80},
+			},
 		})
 
 	key3 := []byte{0x00, 0x23, 0x45}
 	val3 := []byte{0x01, 0x01, 0x01}
 
-	testTrie(t, newTrie(),
+	testTrie(t, who, newTrie(),
 		[]testCase{
 			{op: testGet, k: key1, notFound: true},
 			{op: testPut, k: key1, v: val1},
@@ -119,7 +178,7 @@ func testBasic(t *testing.T, newTrie func() trietest.Trie) {
 	key4 := []byte{0x00, 0x34, 0x56}
 	val4 := []byte{0x02, 0x03, 0x04}
 
-	testTrie(t, newTrie(),
+	testTrie(t, who, newTrie(),
 		[]testCase{
 			{op: testGet, k: key1, notFound: true},
 			{op: testPut, k: key1, v: val1},
@@ -144,7 +203,7 @@ func testBasic(t *testing.T, newTrie func() trietest.Trie) {
 	key5 := []byte{0x00}
 	val5 := []byte{0x11, 0x22, 0x33, 0x44}
 
-	testTrie(t, newTrie(),
+	testTrie(t, who, newTrie(),
 		[]testCase{
 			{op: testGet, k: key1, notFound: true},
 			{op: testPut, k: key1, v: val1},
@@ -183,7 +242,7 @@ func testBasic(t *testing.T, newTrie func() trietest.Trie) {
 	val9 := []byte{0x99, 0x99}
 	val9a := []byte{0x9a, 0x9A}
 
-	testTrie(t, newTrie(),
+	testTrie(t, who, newTrie(),
 		[]testCase{
 			{op: testGet, k: key6, notFound: true},
 			{op: testPut, k: key6, v: val6},
@@ -223,7 +282,7 @@ func testBasic(t *testing.T, newTrie func() trietest.Trie) {
 	key12 := []byte{0x01, 0x23, 0x45, 0x67}
 	val12 := []byte{0xCC, 0xCC}
 
-	testTrie(t, newTrie(),
+	testTrie(t, who, newTrie(),
 		[]testCase{
 			{op: testGet, k: key10, notFound: true},
 			{op: testPut, k: key10, v: val10},
@@ -245,7 +304,7 @@ func testBasic(t *testing.T, newTrie func() trietest.Trie) {
 			},
 		})
 
-	testTrie(t, newTrie(),
+	testTrie(t, who, newTrie(),
 		[]testCase{
 			{op: testGet, k: key10, notFound: true},
 			{op: testPut, k: key10, v: val10},
@@ -269,7 +328,7 @@ func testBasic(t *testing.T, newTrie func() trietest.Trie) {
 }
 
 func TestBasic(t *testing.T) {
-	//testBasic(t, trietest.NewMPTrie)
-	testBasic(t, trietest.NewZhangTrie)
-	testBasic(t, trietest.NewEthTrie)
+	testBasic(t, "mptrie", trietest.NewMPTrie)
+	testBasic(t, "zhang", trietest.NewZhangTrie)
+	testBasic(t, "eth", trietest.NewEthTrie)
 }

@@ -14,4 +14,5 @@ type Trie interface {
 	Get(key []byte) ([]byte, error)
 	Hash() []byte
 	Put(key, val []byte) error
+	Serialize() ([]byte, bool)
 }
