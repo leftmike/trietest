@@ -324,3 +324,91 @@ func TestBasic(t *testing.T) {
 	testBasic(t, "zhang", trietest.NewZhangTrie)
 	testBasic(t, "eth", trietest.NewEthTrie)
 }
+
+func testGetTrie(t *testing.T, who string, trie trietest.Trie, k, v []byte) {
+	t.Helper()
+
+	val, err := trie.Get(k)
+	if err != nil {
+		t.Errorf("%s.Get(%#v) failed with %s", who, k, err)
+	} else if !bytes.Equal(val, v) {
+		t.Errorf("%s.Get(%#v): got %#v, want %#v", who, k, val, v)
+	}
+}
+
+func testHashTrie(t *testing.T, who string, trie trietest.Trie, hash []byte) {
+	t.Helper()
+
+	h := trie.Hash()
+	if !bytes.Equal(hash, h) {
+		t.Errorf("%s.Hash(): got %#v, want %#v", who, h, hash)
+	}
+}
+
+func testPutTrie(t *testing.T, who string, trie trietest.Trie, k, v []byte) {
+	t.Helper()
+
+	err := trie.Put(k, v)
+	if err != nil {
+		t.Errorf("%s.Put(%#v, %#v) failed with %s", who, k, v, err)
+	}
+}
+
+func makeKey(el int, lb []byte, ll int) []byte {
+	if (el+ll)%2 == 1 {
+		ll += 1
+	}
+	nk := append(bytes.Repeat([]byte{0x01}, el), bytes.Repeat(lb, ll)...)
+
+	k := make([]byte, 0, (el+ll)/2)
+	for ni := 0; ni < el+ll; ni += 2 {
+		k = append(k, (nk[ni]<<4)|nk[ni+1])
+	}
+	return k
+}
+
+func testEdge(t *testing.T, who string, trie trietest.Trie, el, ll1, ll2, vl int) {
+	t.Helper()
+
+	k1 := makeKey(el, []byte{0x0A}, ll1)
+	v1 := bytes.Repeat([]byte{0xAA}, vl)
+	testPutTrie(t, who, trie, k1, v1)
+
+	k2 := makeKey(el, []byte{0x0B}, ll2)
+	v2 := []byte{0xBB}
+	testPutTrie(t, who, trie, k2, v2)
+
+	testGetTrie(t, who, trie, k1, v1)
+	testGetTrie(t, who, trie, k2, v2)
+}
+
+func trieSize(el, ll1, ll2, vl int) int {
+	return el/2 + ll1/2 + ll2/2 + vl + 1
+}
+
+func TestEdge(t *testing.T) {
+	for vl := 1; vl < 35; vl++ {
+		for el := 0; el < 70; el++ {
+			for ll1 := 1; ll1 < 70; ll1++ {
+				for _, ll2 := range []int{0, ll1, ll1 + 1} {
+					sz := trieSize(el, ll1, ll2, vl)
+					if sz < 28 || sz > 34 {
+						continue
+					}
+
+					trie := trietest.NewEthTrie()
+					testEdge(t, "eth", trie, el, ll1, ll2, vl)
+					hash := trie.Hash()
+
+					trie = trietest.NewMPTrie()
+					testEdge(t, "mptrie", trie, el, ll1, ll2, vl)
+					testHashTrie(t, "mptrie", trie, hash)
+
+					trie = trietest.NewZhangTrie()
+					testEdge(t, "zhang", trie, el, ll1, ll2, vl)
+					testHashTrie(t, "zhang", trie, hash)
+				}
+			}
+		}
+	}
+}
