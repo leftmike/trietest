@@ -2,8 +2,11 @@ package trietest_test
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/leftmike/trietest"
 )
@@ -409,6 +412,96 @@ func TestEdge(t *testing.T) {
 					testHashTrie(t, "zhang", trie, hash)
 				}
 			}
+		}
+	}
+}
+
+type keyValue struct {
+	k, v []byte
+}
+
+func testKeyValues(t *testing.T, who string, trie trietest.Trie, seed int64, kv []keyValue) {
+	t.Helper()
+
+	r := rand.New(rand.NewSource(seed))
+	for i := range r.Perm(len(kv)) {
+		testPutTrie(t, who, trie, kv[i].k, kv[i].v)
+	}
+
+	for i := range r.Perm(len(kv)) {
+		testGetTrie(t, who, trie, kv[i].k, kv[i].v)
+	}
+}
+
+func randomBytes(r *rand.Rand, min, max int) []byte {
+	bl := r.Intn(max-min+1) + min
+	b := make([]byte, 0, bl)
+	for bl > 0 {
+		b = append(b, byte(r.Intn(256)))
+		bl -= 1
+	}
+
+	return b
+}
+
+func randomKeyValues(seed int64, n, minKey, maxKey, minVal, maxVal int) []keyValue {
+	var kv []keyValue
+	r := rand.New(rand.NewSource(seed))
+	keys := map[string]struct{}{}
+
+	for n > 0 {
+		var k []byte
+		for {
+			k = randomBytes(r, minKey, maxKey)
+			s := hex.EncodeToString(k)
+			if _, ok := keys[s]; !ok {
+				keys[s] = struct{}{}
+				break
+			}
+		}
+
+		kv = append(kv,
+			keyValue{
+				k: k,
+				v: randomBytes(r, minVal, maxVal),
+			})
+
+		n -= 1
+	}
+
+	return kv
+}
+
+func testRandom(t *testing.T, seed int64) {
+	t.Helper()
+
+	kv := randomKeyValues(seed, 20000, 1, 64, 1, 128)
+
+	trie := trietest.NewEthTrie()
+	testKeyValues(t, "eth", trie, seed, kv)
+	hash := trie.Hash()
+
+	trie = trietest.NewMPTrie()
+	testKeyValues(t, "mptrie", trie, seed, kv)
+	testHashTrie(t, "mptrie", trie, hash)
+
+	trie = trietest.NewZhangTrie()
+	testKeyValues(t, "zhang", trie, seed, kv)
+	testHashTrie(t, "zhang", trie, hash)
+}
+
+func TestRandom(t *testing.T) {
+	start := time.Now()
+	for {
+		seed := time.Now().UnixNano()
+		testRandom(t, seed)
+
+		if testing.Short() {
+			break
+		}
+
+		if time.Since(start).Seconds() > 60 {
+			break
 		}
 	}
 }
