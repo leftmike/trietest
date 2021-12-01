@@ -35,7 +35,7 @@ func testTrie(t *testing.T, who string, trie trietest.Trie, cases []testCase) {
 			v, err := trie.Get(c.k)
 			if c.notFound {
 				if err != trietest.ErrNotFound {
-					t.Errorf("%s.Get(%#v) returned %s, expected not found", who, c.k, err)
+					t.Errorf("%s.Get(%#v) returned %v, expected not found", who, c.k, err)
 				}
 			} else if err != nil {
 				t.Errorf("%s.Get(%#v) failed with %s", who, c.k, err)
