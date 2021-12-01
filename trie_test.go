@@ -21,9 +21,9 @@ const (
 )
 
 type testCase struct {
-	op             testOp
-	k, v, h, s     []byte
-	fail, notFound bool
+	op         testOp
+	k, v, h, s []byte
+	notFound   bool
 }
 
 func testTrie(t *testing.T, who string, trie trietest.Trie, cases []testCase) {
@@ -36,10 +36,6 @@ func testTrie(t *testing.T, who string, trie trietest.Trie, cases []testCase) {
 			if c.notFound {
 				if err != trietest.ErrNotFound {
 					t.Errorf("%s.Get(%#v) returned %s, expected not found", who, c.k, err)
-				}
-			} else if c.fail {
-				if err == nil {
-					t.Errorf("%s.Get(%#v) did not fail", who, c.k)
 				}
 			} else if err != nil {
 				t.Errorf("%s.Get(%#v) failed with %s", who, c.k, err)
@@ -55,11 +51,7 @@ func testTrie(t *testing.T, who string, trie trietest.Trie, cases []testCase) {
 
 		case testPut:
 			err := trie.Put(c.k, c.v)
-			if c.fail {
-				if err == nil {
-					t.Errorf("%s.Put(%#v, %#v) did not fail", who, c.k, c.v)
-				}
-			} else if err != nil {
+			if err != nil {
 				t.Errorf("%s.Put(%#v, %#v) failed with %s", who, c.k, c.v, err)
 			}
 
