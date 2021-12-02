@@ -14,7 +14,8 @@ import (
 type testOp int
 
 const (
-	testGet testOp = iota
+	testDelete testOp = iota
+	testGet
 	testHash
 	testPut
 	testSerialize
@@ -31,6 +32,16 @@ func testTrie(t *testing.T, who string, trie trietest.Trie, cases []testCase) {
 
 	for _, c := range cases {
 		switch c.op {
+		case testDelete:
+			err := trie.Delete(c.k)
+			if c.notFound {
+				if err != trietest.ErrNotFound {
+					t.Errorf("%s.Delete(%v) returned %v, expected not found", who, c.k, err)
+				}
+			} else if err != nil {
+				t.Errorf("%s.Delete(%v) failed with %s", who, c.k, err)
+			}
+
 		case testGet:
 			v, err := trie.Get(c.k)
 			if c.notFound {
@@ -320,6 +331,15 @@ func TestBasic(t *testing.T) {
 	testBasic(t, "eth", trietest.NewEthTrie)
 }
 
+func testDeleteTrie(t *testing.T, who string, trie trietest.Trie, k []byte) {
+	t.Helper()
+
+	err := trie.Delete(k)
+	if err != nil {
+		t.Errorf("%s.Get(%#v) failed with %s", who, k, err)
+	}
+}
+
 func testGetTrie(t *testing.T, who string, trie trietest.Trie, k, v []byte) {
 	t.Helper()
 
@@ -412,7 +432,7 @@ type keyValue struct {
 	k, v []byte
 }
 
-func testKeyValues(t *testing.T, who string, trie trietest.Trie, seed int64, kv []keyValue) {
+func testGetPut(t *testing.T, who string, trie trietest.Trie, seed int64, kv []keyValue) {
 	t.Helper()
 
 	r := rand.New(rand.NewSource(seed))
@@ -464,29 +484,31 @@ func randomKeyValues(seed int64, n, minKey, maxKey, minVal, maxVal int) []keyVal
 	return kv
 }
 
-func testRandom(t *testing.T, seed int64) {
+func testRandomGetPut(t *testing.T, seed int64, n int) {
 	t.Helper()
 
-	kv := randomKeyValues(seed, 20000, 1, 64, 1, 128)
+	kv := randomKeyValues(seed, n, 1, 64, 1, 128)
 
 	trie := trietest.NewEthTrie()
-	testKeyValues(t, "eth", trie, seed, kv)
+	testGetPut(t, "eth", trie, seed, kv)
 	hash := trie.Hash()
 
 	trie = trietest.NewMPTrie()
-	testKeyValues(t, "mptrie", trie, seed, kv)
+	testGetPut(t, "mptrie", trie, seed, kv)
 	testHashTrie(t, "mptrie", trie, hash)
 
 	trie = trietest.NewZhangTrie()
-	testKeyValues(t, "zhang", trie, seed, kv)
+	testGetPut(t, "zhang", trie, seed, kv)
 	testHashTrie(t, "zhang", trie, hash)
 }
 
-func TestRandom(t *testing.T) {
+func TestRandomGetPut(t *testing.T) {
 	start := time.Now()
 	for {
-		seed := time.Now().UnixNano()
-		testRandom(t, seed)
+		for _, n := range []int{20, 200, 2000, 20000} {
+			seed := time.Now().UnixNano()
+			testRandomGetPut(t, seed, n)
+		}
 
 		if testing.Short() {
 			break
@@ -496,4 +518,123 @@ func TestRandom(t *testing.T) {
 			break
 		}
 	}
+}
+
+func testDeleteOk(t *testing.T, who string, trie trietest.Trie, kv []keyValue, bs []bool) {
+	t.Helper()
+
+	for i := 0; i < len(kv); i += 1 {
+		if bs[i] {
+			testDeleteTrie(t, who, trie, kv[i].k)
+		}
+	}
+}
+
+func testDeleteNotFound(t *testing.T, who string, trie trietest.Trie, kv []keyValue, bs []bool) {
+	t.Helper()
+
+	for i := 0; i < len(kv); i += 1 {
+		if bs[i] {
+			err := trie.Delete(kv[i].k)
+			if err != trietest.ErrNotFound {
+				t.Errorf("%s.Delete(%v) returned %v, expected not found", who, kv[i].k, err)
+			}
+		}
+	}
+}
+
+func testGetNotFound(t *testing.T, who string, trie trietest.Trie, kv []keyValue, bs []bool) {
+	t.Helper()
+
+	for i := 0; i < len(kv); i += 1 {
+		if bs[i] {
+			_, err := trie.Get(kv[i].k)
+			if err != trietest.ErrNotFound {
+				t.Errorf("%s.Get(%v) returned %v, expected not found", who, kv[i].k, err)
+			}
+		}
+	}
+}
+
+func testPutOk(t *testing.T, who string, trie trietest.Trie, kv []keyValue, bs []bool) {
+	t.Helper()
+
+	for i := 0; i < len(kv); i += 1 {
+		if bs[i] {
+			err := trie.Put(kv[i].k, kv[i].v)
+			if err != nil {
+				t.Errorf("%s.Put(%#v, %#v) failed with %s", who, kv[i].k, kv[i].v, err)
+			}
+		}
+	}
+}
+
+func randomBoolSlice(seed int64, n, t int) []bool {
+	bs := make([]bool, n)
+	for t > 0 {
+		t -= 1
+		bs[t] = true
+	}
+
+	r := rand.New(rand.NewSource(seed))
+	r.Shuffle(n,
+		func(i, j int) {
+			bs[i], bs[j] = bs[j], bs[i]
+		})
+	return bs
+}
+
+func testRandomDeleteGetPut(t *testing.T, seed int64, n int) {
+	t.Helper()
+
+	kv := randomKeyValues(seed, n, 1, 64, 1, 128)
+	bs := randomBoolSlice(seed, n, n/4)
+
+	trie := trietest.NewEthTrie()
+	testGetPut(t, "eth", trie, seed, kv)
+	hash1 := trie.Hash()
+	testDeleteOk(t, "eth", trie, kv, bs)
+	hash2 := trie.Hash()
+	testDeleteNotFound(t, "eth", trie, kv, bs)
+	testGetNotFound(t, "eth", trie, kv, bs)
+	testHashTrie(t, "eth", trie, hash2)
+	testPutOk(t, "eth", trie, kv, bs)
+	testHashTrie(t, "eth", trie, hash1)
+
+	trie = trietest.NewMPTrie()
+	testGetPut(t, "mptrie", trie, seed, kv)
+	testHashTrie(t, "mptrie", trie, hash1)
+	testDeleteOk(t, "mptrie", trie, kv, bs)
+	testHashTrie(t, "mptrie", trie, hash2)
+	testDeleteNotFound(t, "mptrie", trie, kv, bs)
+	testGetNotFound(t, "mptrie", trie, kv, bs)
+	testHashTrie(t, "mptrie", trie, hash2)
+	testPutOk(t, "mptrie", trie, kv, bs)
+	testHashTrie(t, "mptrie", trie, hash1)
+}
+
+func TestRandomDeleteGetPut(t *testing.T) {
+	start := time.Now()
+	for {
+		for _, n := range []int{20, 200, 2000, 20000} {
+			seed := time.Now().UnixNano()
+			testRandomDeleteGetPut(t, seed, n)
+		}
+
+		if testing.Short() {
+			break
+		}
+
+		if time.Since(start).Seconds() > 60 {
+			break
+		}
+	}
+}
+
+func TestRandomUpdate(t *testing.T) {
+	// XXX: test Puts which are updates
+}
+
+func TestRandom(t *testing.T) {
+	// XXX: test a random sequence of operations, keeping number of keys in some range
 }
