@@ -445,6 +445,21 @@ func testGetPut(t *testing.T, who string, trie trietest.Trie, seed int64, kv []k
 	}
 }
 
+func testUpdate(t *testing.T, who string, trie trietest.Trie, seed int64, kv []keyValue,
+	vs [][]byte) {
+
+	t.Helper()
+
+	r := rand.New(rand.NewSource(seed))
+	for i := range r.Perm(len(kv)) {
+		testPutTrie(t, who, trie, kv[i].k, vs[i])
+	}
+
+	for i := range r.Perm(len(kv)) {
+		testGetTrie(t, who, trie, kv[i].k, vs[i])
+	}
+}
+
 func randomBytes(r *rand.Rand, min, max int) []byte {
 	bl := r.Intn(max-min+1) + min
 	b := make([]byte, 0, bl)
@@ -457,7 +472,7 @@ func randomBytes(r *rand.Rand, min, max int) []byte {
 }
 
 func randomKeyValues(seed int64, n, minKey, maxKey, minVal, maxVal int) []keyValue {
-	var kv []keyValue
+	kv := make([]keyValue, 0, n)
 	r := rand.New(rand.NewSource(seed))
 	keys := map[string]struct{}{}
 
@@ -482,6 +497,18 @@ func randomKeyValues(seed int64, n, minKey, maxKey, minVal, maxVal int) []keyVal
 	}
 
 	return kv
+}
+
+func randomValues(seed int64, n, minVal, maxVal int) [][]byte {
+	vs := make([][]byte, 0, n)
+	r := rand.New(rand.NewSource(seed))
+
+	for n > 0 {
+		vs = append(vs, randomBytes(r, minVal, maxVal))
+		n -= 1
+	}
+
+	return vs
 }
 
 func testRandomGetPut(t *testing.T, seed int64, n int) {
@@ -631,8 +658,47 @@ func TestRandomDeleteGetPut(t *testing.T) {
 	}
 }
 
+func testRandomUpdate(t *testing.T, seed int64, n int) {
+	t.Helper()
+
+	kv := randomKeyValues(seed, n, 1, 64, 1, 128)
+	vs := randomValues(seed, n, 1, 256)
+
+	trie := trietest.NewEthTrie()
+	testGetPut(t, "eth", trie, seed, kv)
+	hash1 := trie.Hash()
+	testUpdate(t, "eth", trie, seed, kv, vs)
+	hash2 := trie.Hash()
+
+	trie = trietest.NewMPTrie()
+	testGetPut(t, "mptrie", trie, seed, kv)
+	testHashTrie(t, "mptrie", trie, hash1)
+	testUpdate(t, "mptrie", trie, seed, kv, vs)
+	testHashTrie(t, "mptrie", trie, hash2)
+
+	trie = trietest.NewZhangTrie()
+	testGetPut(t, "zhang", trie, seed, kv)
+	testHashTrie(t, "zhang", trie, hash1)
+	testUpdate(t, "zhang", trie, seed, kv, vs)
+	testHashTrie(t, "zhang", trie, hash2)
+}
+
 func TestRandomUpdate(t *testing.T) {
-	// XXX: test Puts which are updates
+	start := time.Now()
+	for {
+		for _, n := range []int{20, 200, 2000, 20000} {
+			seed := time.Now().UnixNano()
+			testRandomUpdate(t, seed, n)
+		}
+
+		if testing.Short() {
+			break
+		}
+
+		if time.Since(start).Seconds() > 60 {
+			break
+		}
+	}
 }
 
 func TestRandom(t *testing.T) {
